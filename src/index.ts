@@ -53,10 +53,11 @@ class PemerintahBot {
   }
 
   private setupHealthCheckServer(): void {
-    const port = process.env.PORT || 3000;
+    const port = parseInt(process.env.PORT || "3000", 10);
 
     this.httpServer = Bun.serve({
       port: port,
+      hostname: "0.0.0.0",
       fetch: async (req) => {
         const url = new URL(req.url);
 
@@ -70,7 +71,10 @@ class PemerintahBot {
               timestamp: new Date().toISOString(),
             }),
             {
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+              },
             }
           );
         }
@@ -83,7 +87,10 @@ class PemerintahBot {
               nextCheck: this.scheduler.getNextRunTime("news-monitor"),
             }),
             {
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+              },
             }
           );
         }
@@ -312,6 +319,19 @@ class PemerintahBot {
         });
       }
     );
+
+    // Keep Railway container alive with self-ping every 10 minutes
+    this.scheduler.scheduleJob("keep-alive", 10, async () => {
+      try {
+        const healthUrl = `http://localhost:${process.env.PORT || 3000}/health`;
+        const response = await fetch(healthUrl);
+        if (response.ok) {
+          this.logger.debug("Keep-alive ping successful");
+        }
+      } catch (error) {
+        this.logger.debug("Keep-alive ping failed", { error });
+      }
+    });
 
     // Cleanup old articles daily
     this.scheduler.scheduleJob(

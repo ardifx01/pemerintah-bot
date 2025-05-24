@@ -5,7 +5,6 @@
  */
 
 import { writeFileSync, existsSync } from "fs";
-import { join } from "path";
 
 interface SetupConfig {
   discordWebhookUrl: string;
@@ -44,7 +43,6 @@ async function setup(): Promise<void> {
     "This setup will help you configure the Indonesian news monitoring bot.\n"
   );
 
-  // Check if .env already exists
   if (existsSync(".env")) {
     console.log("⚠️  .env file already exists!");
     const overwrite = await prompt("Do you want to overwrite it? (y/N): ");
@@ -63,7 +61,6 @@ async function setup(): Promise<void> {
     logLevel: "info",
   };
 
-  // Discord Webhook URL
   console.log("📢 Discord Configuration");
   console.log("------------------------");
   console.log("To get a Discord webhook URL:");
@@ -113,7 +110,6 @@ async function setup(): Promise<void> {
 
   console.log("✅ Keywords configured\n");
 
-  // Check interval
   console.log("⏰ Monitoring Configuration");
   console.log("---------------------------");
 
@@ -149,7 +145,6 @@ async function setup(): Promise<void> {
 
   console.log("✅ Monitoring configuration set\n");
 
-  // Log level
   console.log("📝 Logging Configuration");
   console.log("------------------------");
   console.log("Available log levels: debug, info, warn, error");
@@ -171,7 +166,6 @@ async function setup(): Promise<void> {
 
   console.log("✅ Log level configured\n");
 
-  // Generate .env file
   const envContent = `# Discord Configuration
 DISCORD_WEBHOOK_URL=${config.discordWebhookUrl}
 
@@ -203,7 +197,6 @@ USER_AGENT=Mozilla/5.0 (compatible; PemerintahBot/1.0; +https://github.com/yourn
     process.exit(1);
   }
 
-  // Setup summary
   console.log("🎉 Setup Complete!");
   console.log("==================");
   console.log("Configuration Summary:");
@@ -224,8 +217,7 @@ USER_AGENT=Mozilla/5.0 (compatible; PemerintahBot/1.0; +https://github.com/yourn
   console.log("Happy monitoring! 🇮🇩");
 }
 
-// Main execution
-if (import.meta.main) {
+if ((import.meta as any).main) {
   process.stdin.setRawMode(false);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
