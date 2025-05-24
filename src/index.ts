@@ -118,9 +118,15 @@ class PemerintahBot {
       this.logger.info("Testing Discord connection...");
       const discordConnected = await this.discord.testConnection();
       if (!discordConnected) {
-        throw new Error("Failed to connect to Discord webhook");
+        this.logger.warn(
+          "Discord connection failed - bot will continue but notifications may not work"
+        );
+        this.logger.warn(
+          "Please check your DISCORD_WEBHOOK_URL environment variable"
+        );
+      } else {
+        this.logger.info("Discord connection successful");
       }
-      this.logger.info("Discord connection successful");
 
       this.scheduler.scheduleJob(
         "news-monitor",
