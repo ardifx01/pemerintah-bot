@@ -18,6 +18,7 @@ class PemerintahBot {
   private scheduler: SchedulerService;
   private scrapers: BaseScraper[];
   private isRunning = false;
+  private httpServer: any = null;
 
   constructor() {
     this.logger = new Logger(this.config.logging.level, "./logs/app.log");
@@ -51,6 +52,49 @@ class PemerintahBot {
     });
   }
 
+  private setupHealthCheckServer(): void {
+    const port = process.env.PORT || 3000;
+
+    this.httpServer = Bun.serve({
+      port: port,
+      fetch: async (req) => {
+        const url = new URL(req.url);
+
+        if (url.pathname === "/") {
+          const status = this.getStatus();
+          return new Response(
+            JSON.stringify({
+              status: "healthy",
+              message: "Pemerintah Bot is running",
+              ...status,
+              timestamp: new Date().toISOString(),
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        if (url.pathname === "/health") {
+          return new Response(
+            JSON.stringify({
+              status: "healthy",
+              uptime: process.uptime(),
+              nextCheck: this.scheduler.getNextRunTime("news-monitor"),
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+
+    this.logger.info(`Health check server started on port ${port}`);
+  }
+
   async start(): Promise<void> {
     if (this.isRunning) {
       this.logger.warn("Bot is already running");
@@ -59,6 +103,8 @@ class PemerintahBot {
 
     try {
       this.logger.info("Starting Pemerintah Bot...");
+
+      this.setupHealthCheckServer();
 
       await this.database.initialize();
 
@@ -82,6 +128,7 @@ class PemerintahBot {
       this.isRunning = true;
       this.logger.info("Pemerintah Bot started successfully", {
         nextCheck: this.scheduler.getNextRunTime("news-monitor"),
+        healthCheckPort: process.env.PORT || 3000,
       });
 
       this.setupGracefulShutdown();
@@ -289,6 +336,11 @@ class PemerintahBot {
 
     try {
       this.scheduler.stopAllJobs();
+
+      if (this.httpServer) {
+        this.httpServer.stop();
+        this.logger.info("Health check server stopped");
+      }
 
       await this.database.close();
 

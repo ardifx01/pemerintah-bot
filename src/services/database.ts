@@ -116,7 +116,7 @@ class DatabaseService {
       SELECT id, url, title, source, published_at, processed_at, matched_keywords, image_url, description
       FROM articles
     `;
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (source) {
       queryText += " WHERE source = ?";

@@ -6,8 +6,8 @@ import { logger } from "../utils/logger.js";
 export class DetikScraper extends BaseScraper {
   private rssParser: Parser;
   private readonly RSS_URLS = [
-    "https://rss.detik.com/index.xml", // Main RSS
-    "https://rss.detik.com/detikcom_news.xml", // News RSS
+    "https://news.detik.com/berita/rss", // News RSS (updated URL)
+    "https://finance.detik.com/rss", // Finance RSS (updated URL)
   ];
   private readonly BASE_URL = "https://www.detik.com";
 
