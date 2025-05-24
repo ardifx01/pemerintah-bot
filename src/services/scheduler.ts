@@ -6,13 +6,6 @@ export type SchedulerCallback = () => Promise<void>;
 export class SchedulerService {
   private jobs: Map<string, CronJob> = new Map();
 
-  /**
-   * Schedule a periodic job
-   * @param name - Unique name for the job
-   * @param cronTime - Cron expression or interval in minutes
-   * @param callback - Function to execute
-   * @param startImmediately - Whether to start the job immediately
-   */
   scheduleJob(
     name: string,
     cronTime: string | number,
@@ -136,11 +129,6 @@ export class SchedulerService {
     return nextDate ? nextDate.toJSDate() : null;
   }
 
-  /**
-   * Convert minutes to cron expression
-   * @param minutes - Interval in minutes
-   * @returns Cron expression string
-   */
   private minutesToCron(minutes: number): string {
     if (minutes < 1) {
       throw new Error("Interval must be at least 1 minute");
@@ -160,9 +148,6 @@ export class SchedulerService {
     }
   }
 
-  /**
-   * Schedule a one-time delayed task
-   */
   scheduleDelayedTask(
     name: string,
     delayMs: number,

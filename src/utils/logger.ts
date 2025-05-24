@@ -1,4 +1,4 @@
-import { writeFileSync, appendFileSync, existsSync, mkdirSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -64,7 +64,6 @@ class Logger {
 
     console.log(`${colors[level]}${formattedMessage}${reset}`);
 
-    // File output
     if (this.logFile) {
       try {
         appendFileSync(this.logFile, formattedMessage + "\n");
@@ -95,8 +94,6 @@ class Logger {
   }
 }
 
-// Export a default logger instance
 export const logger = new Logger();
 
-// Export the Logger class for custom instances
 export { Logger };

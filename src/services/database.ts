@@ -1,4 +1,4 @@
-import Database from "sqlite3";
+import { Database } from "bun:sqlite";
 import { dirname } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { logger } from "../utils/logger.js";
@@ -14,7 +14,7 @@ export interface Article {
 }
 
 class DatabaseService {
-  private db: Database.Database | null = null;
+  private db: Database | null = null;
   private dbPath: string;
 
   constructor(dbPath: string) {
@@ -28,9 +28,9 @@ class DatabaseService {
         mkdirSync(dbDir, { recursive: true });
       }
 
-      this.db = new Database.Database(this.dbPath);
+      this.db = new Database(this.dbPath);
 
-      await this.createTables();
+      this.createTables();
 
       logger.info("Database initialized successfully", { path: this.dbPath });
     } catch (error) {
@@ -42,209 +42,147 @@ class DatabaseService {
     }
   }
 
-  private async createTables(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+  private createTables(): void {
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      const createTableSQL = `
-        CREATE TABLE IF NOT EXISTS articles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          url TEXT UNIQUE NOT NULL,
-          title TEXT NOT NULL,
-          source TEXT NOT NULL,
-          published_at DATETIME NOT NULL,
-          processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          matched_keywords TEXT NOT NULL
-        );
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS articles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        source TEXT NOT NULL,
+        published_at DATETIME NOT NULL,
+        processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        matched_keywords TEXT NOT NULL
+      );
 
-        CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
-        CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
-        CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
-      `;
+      CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
+      CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
+      CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
+    `;
 
-      this.db.exec(createTableSQL, (error) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
-      });
-    });
+    this.db.run(createTableSQL);
   }
 
   async isArticleProcessed(url: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      const query = "SELECT 1 FROM articles WHERE url = ? LIMIT 1";
-      this.db.get(query, [url], (error, row) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(!!row);
-        }
-      });
-    });
+    const query = this.db.query("SELECT 1 FROM articles WHERE url = ? LIMIT 1");
+    const row = query.get(url);
+    return !!row;
   }
 
   async saveArticle(article: Omit<Article, "id">): Promise<number> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      const query = `
-        INSERT INTO articles (url, title, source, published_at, processed_at, matched_keywords)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `;
+    const query = this.db.query(`
+      INSERT INTO articles (url, title, source, published_at, processed_at, matched_keywords)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
 
-      const params = [
-        article.url,
-        article.title,
-        article.source,
-        article.publishedAt.toISOString(),
-        article.processedAt.toISOString(),
-        JSON.stringify(article.matchedKeywords),
-      ];
+    const result = query.run(
+      article.url,
+      article.title,
+      article.source,
+      article.publishedAt.toISOString(),
+      article.processedAt.toISOString(),
+      JSON.stringify(article.matchedKeywords)
+    );
 
-      this.db.run(query, params, function (error) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(this.lastID);
-        }
-      });
-    });
+    return result.lastInsertRowid as number;
   }
 
   async getRecentArticles(
     source?: string,
     limit: number = 50
   ): Promise<Article[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      let query = `
-        SELECT id, url, title, source, published_at, processed_at, matched_keywords
-        FROM articles
-      `;
-      const params: any[] = [];
+    let queryText = `
+      SELECT id, url, title, source, published_at, processed_at, matched_keywords
+      FROM articles
+    `;
+    const params: any[] = [];
 
-      if (source) {
-        query += " WHERE source = ?";
-        params.push(source);
-      }
+    if (source) {
+      queryText += " WHERE source = ?";
+      params.push(source);
+    }
 
-      query += " ORDER BY processed_at DESC LIMIT ?";
-      params.push(limit);
+    queryText += " ORDER BY processed_at DESC LIMIT ?";
+    params.push(limit);
 
-      this.db.all(query, params, (error, rows: any[]) => {
-        if (error) {
-          reject(error);
-        } else {
-          const articles: Article[] = rows.map((row) => ({
-            id: row.id,
-            url: row.url,
-            title: row.title,
-            source: row.source,
-            publishedAt: new Date(row.published_at),
-            processedAt: new Date(row.processed_at),
-            matchedKeywords: JSON.parse(row.matched_keywords),
-          }));
-          resolve(articles);
-        }
-      });
-    });
+    const query = this.db.query(queryText);
+    const rows = query.all(...params) as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      source: row.source,
+      publishedAt: new Date(row.published_at),
+      processedAt: new Date(row.processed_at),
+      matchedKeywords: JSON.parse(row.matched_keywords),
+    }));
   }
 
   async cleanup(olderThanDays: number = 30): Promise<number> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
-      const query = "DELETE FROM articles WHERE processed_at < ?";
-      this.db.run(query, [cutoffDate.toISOString()], function (error) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(this.changes);
-        }
-      });
-    });
+    const query = this.db.query("DELETE FROM articles WHERE processed_at < ?");
+    const result = query.run(cutoffDate.toISOString());
+
+    return result.changes;
   }
 
   async getStats(): Promise<{
     total: number;
     bySource: Record<string, number>;
   }> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error("Database not initialized"));
-        return;
-      }
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      this.db.get(
-        "SELECT COUNT(*) as total FROM articles",
-        (error, totalRow: any) => {
-          if (error) {
-            reject(error);
-            return;
-          }
+    const totalQuery = this.db.query("SELECT COUNT(*) as total FROM articles");
+    const totalResult = totalQuery.get() as { total: number };
 
-          this.db?.all(
-            "SELECT source, COUNT(*) as count FROM articles GROUP BY source",
-            (error, sourceRows: any[]) => {
-              if (error) {
-                reject(error);
-              } else {
-                const bySource: Record<string, number> = {};
-                sourceRows.forEach((row) => {
-                  bySource[row.source] = row.count;
-                });
+    const sourceQuery = this.db.query(
+      "SELECT source, COUNT(*) as count FROM articles GROUP BY source"
+    );
+    const sourceResults = sourceQuery.all() as Array<{
+      source: string;
+      count: number;
+    }>;
 
-                resolve({
-                  total: totalRow.total,
-                  bySource,
-                });
-              }
-            }
-          );
-        }
-      );
+    const bySource: Record<string, number> = {};
+    sourceResults.forEach((row) => {
+      bySource[row.source] = row.count;
     });
+
+    return {
+      total: totalResult.total,
+      bySource,
+    };
   }
 
   async close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        resolve();
-        return;
-      }
-
-      this.db.close((error) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.db = null;
-          resolve();
-        }
-      });
-    });
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
   }
 }
 
