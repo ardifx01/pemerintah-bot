@@ -11,6 +11,8 @@ export interface Article {
   publishedAt: Date;
   processedAt: Date;
   matchedKeywords: string[];
+  imageUrl?: string;
+  description?: string;
 }
 
 class DatabaseService {
@@ -55,7 +57,9 @@ class DatabaseService {
         source TEXT NOT NULL,
         published_at DATETIME NOT NULL,
         processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        matched_keywords TEXT NOT NULL
+        matched_keywords TEXT NOT NULL,
+        image_url TEXT,
+        description TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
@@ -82,8 +86,8 @@ class DatabaseService {
     }
 
     const query = this.db.query(`
-      INSERT INTO articles (url, title, source, published_at, processed_at, matched_keywords)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO articles (url, title, source, published_at, processed_at, matched_keywords, image_url, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = query.run(
@@ -92,7 +96,9 @@ class DatabaseService {
       article.source,
       article.publishedAt.toISOString(),
       article.processedAt.toISOString(),
-      JSON.stringify(article.matchedKeywords)
+      JSON.stringify(article.matchedKeywords),
+      article.imageUrl || null,
+      article.description || null
     );
 
     return result.lastInsertRowid as number;
@@ -107,7 +113,7 @@ class DatabaseService {
     }
 
     let queryText = `
-      SELECT id, url, title, source, published_at, processed_at, matched_keywords
+      SELECT id, url, title, source, published_at, processed_at, matched_keywords, image_url, description
       FROM articles
     `;
     const params: any[] = [];
@@ -131,6 +137,8 @@ class DatabaseService {
       publishedAt: new Date(row.published_at),
       processedAt: new Date(row.processed_at),
       matchedKeywords: JSON.parse(row.matched_keywords),
+      imageUrl: row.image_url || undefined,
+      description: row.description || undefined,
     }));
   }
 

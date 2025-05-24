@@ -17,6 +17,9 @@ interface DiscordEmbed {
     value: string;
     inline?: boolean;
   }>;
+  image?: {
+    url: string;
+  };
 }
 
 interface DiscordMessage {
@@ -123,15 +126,20 @@ export class DiscordService {
       },
     };
 
+    if (article.description) {
+      embed.description = this.truncateText(article.description, 300);
+    }
+
+    if (article.imageUrl) {
+      embed.image = {
+        url: article.imageUrl,
+      };
+    }
+
     if (article.matchedKeywords.length > 0) {
       embed.fields = [
         {
-          name: "🎯 Matched Keywords",
-          value: article.matchedKeywords.map((k) => `\`${k}\``).join(", "),
-          inline: true,
-        },
-        {
-          name: "🕒 Published",
+          name: "Published",
           value: this.formatRelativeTime(article.publishedAt),
           inline: true,
         },

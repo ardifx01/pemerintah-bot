@@ -1,11 +1,14 @@
 import axios, { AxiosInstance } from "axios";
-import { logger } from "../utils/logger.js";
+import * as cheerio from "cheerio";
+import { logger } from "../utils/logger";
 
 export interface NewsItem {
   title: string;
   url: string;
   publishedAt: Date;
   source: string;
+  imageUrl?: string;
+  description?: string;
 }
 
 export interface ScrapedResult {
@@ -89,6 +92,148 @@ export abstract class BaseScraper {
   }
 
   abstract scrapeNews(): Promise<ScrapedResult>;
+
+  /**
+   * Fetch article metadata including image and description
+   */
+  protected async fetchArticleMetadata(
+    url: string
+  ): Promise<{ imageUrl?: string; description?: string }> {
+    try {
+      logger.debug(`Fetching metadata for article: ${url}`);
+
+      const response = await this.httpClient.get(url);
+      const $ = cheerio.load(response.data);
+
+      // Extract OG image
+      let imageUrl =
+        $('meta[property="og:image"]').attr("content") ||
+        $('meta[name="twitter:image"]').attr("content") ||
+        $('meta[property="og:image:url"]').attr("content");
+
+      // Make image URL absolute if needed
+      if (imageUrl && !this.isValidUrl(imageUrl)) {
+        imageUrl = this.makeAbsoluteUrl(imageUrl, url);
+      }
+
+      // Extract description from meta tags first
+      let description =
+        $('meta[property="og:description"]').attr("content") ||
+        $('meta[name="description"]').attr("content") ||
+        $('meta[name="twitter:description"]').attr("content");
+
+      // If no meta description, try to extract from article content
+      if (!description) {
+        description = this.extractArticlePreview($, url);
+      }
+
+      // Clean and limit description length
+      if (description) {
+        description = this.cleanDescription(description);
+      }
+
+      logger.debug(`Metadata extracted for ${url}`, {
+        hasImage: !!imageUrl,
+        hasDescription: !!description,
+        imageUrl:
+          imageUrl?.substring(0, 100) +
+          (imageUrl && imageUrl.length > 100 ? "..." : ""),
+        descriptionLength: description?.length || 0,
+      });
+
+      return { imageUrl, description };
+    } catch (error) {
+      logger.warn(`Failed to fetch metadata for ${url}`, { error });
+      return {};
+    }
+  }
+
+  /**
+   * Extract article preview from content
+   */
+  private extractArticlePreview(
+    $: cheerio.CheerioAPI,
+    url: string
+  ): string | undefined {
+    // Common selectors for article content based on Indonesian news sites
+    const contentSelectors = [
+      ".detail-content p", // Common for many Indonesian sites
+      ".article-content p",
+      ".content-body p",
+      ".post-content p",
+      ".entry-content p",
+      "article p",
+      ".article p",
+      '[data-testid="article-content"] p', // BBC
+      ".detail_text p", // Detik
+      ".text_detail p", // CNN Indonesia
+      "p", // Fallback
+    ];
+
+    for (const selector of contentSelectors) {
+      const paragraphs = $(selector);
+
+      if (paragraphs.length > 0) {
+        // Get first 1-2 meaningful paragraphs
+        let preview = "";
+        let sentenceCount = 0;
+
+        paragraphs.each((_, element) => {
+          const text = $(element).text().trim();
+
+          // Skip short paragraphs, ads, or navigation text
+          if (
+            text.length < 30 ||
+            text.toLowerCase().includes("baca juga") ||
+            text.toLowerCase().includes("lihat juga") ||
+            text.toLowerCase().includes("advertisement") ||
+            text.toLowerCase().includes("iklan") ||
+            text.match(/^\d+\/\d+/) || // Skip date-like text
+            text.includes("©") || // Skip copyright
+            text.toLowerCase().includes("follow") ||
+            text.toLowerCase().includes("subscribe")
+          ) {
+            return;
+          }
+
+          // Add sentences until we have 1-2 complete sentences
+          const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+
+          for (const sentence of sentences) {
+            if (sentenceCount >= 2) break;
+
+            const cleanSentence = sentence.trim();
+            if (cleanSentence.length > 20) {
+              preview += (preview ? " " : "") + cleanSentence;
+              sentenceCount++;
+            }
+          }
+
+          if (sentenceCount >= 2) return false; // Break out of each loop
+        });
+
+        if (preview.length > 50) {
+          return preview;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Clean and format description text
+   */
+  private cleanDescription(description: string): string {
+    return description
+      .trim()
+      .replace(/\s+/g, " ") // Normalize whitespace
+      .replace(/\n|\r/g, " ") // Remove newlines
+      .replace(/\t/g, " ") // Remove tabs
+      .replace(/\s{2,}/g, " ") // Remove multiple spaces
+      .substring(0, 300) // Limit to 300 characters for Discord
+      .trim();
+  }
 
   protected async delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

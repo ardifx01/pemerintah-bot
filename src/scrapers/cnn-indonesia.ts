@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import * as cheerio from "cheerio";
-import { BaseScraper, NewsItem, ScrapedResult } from "./base.js";
-import { logger } from "../utils/logger.js";
+import { BaseScraper, NewsItem, ScrapedResult } from "./base";
+import { logger } from "../utils/logger";
 
 export class CNNIndonesiaScraper extends BaseScraper {
   private rssParser: Parser;
@@ -82,12 +82,14 @@ export class CNNIndonesiaScraper extends BaseScraper {
             continue;
           }
 
-          articles.push({
+          const baseArticle: NewsItem = {
             title: this.cleanTitle(item.title),
             url: item.link,
             publishedAt,
             source: this.source,
-          });
+          };
+
+          articles.push(baseArticle);
         } catch (error) {
           logger.warn("Error processing RSS item", { error, item: item.title });
         }

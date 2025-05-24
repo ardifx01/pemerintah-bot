@@ -5,11 +5,14 @@ A bot that monitors Indonesian news sites and sends filtered articles to your Di
 ## Features
 
 - 🔍 **Multi-source monitoring**: CNN Indonesia, Detik.com, BBC Indonesia
-- 🎯 **Keyword filtering**: Customizable whole-word matching
-- 📢 **Discord integration**: Automatic posting to Discord channels
+- 🎯 **Smart keyword filtering**: Supports both single words and multi-word phrases with whole-word matching
+- 📢 **Rich Discord integration**: Beautiful embeds with article images, descriptions, and highlighted keywords
+- 🖼️ **Visual content**: Automatically fetches and displays article images from OpenGraph meta tags
+- 📝 **Article previews**: Extracts first 1-2 sentences for better content insight
 - 🚀 **Real-time monitoring**: Only new articles (no historical spam)
 - ⚡ **Fast & efficient**: Built with Bun.js for optimal performance
 - 🛡️ **Robust**: Handles rate limiting and errors gracefully
+- 🗃️ **Smart deduplication**: SQLite database prevents duplicate notifications
 
 ## Prerequisites
 
@@ -77,9 +80,10 @@ If you prefer to configure manually:
 
 1. **RSS First**: Attempts to fetch news via RSS feeds for efficiency
 2. **Web Scraping Fallback**: If RSS fails, falls back to web scraping
-3. **Duplicate Detection**: Uses Bun's SQLite to track already-sent articles
-4. **Keyword Matching**: Filters titles using whole-word matching
-5. **Discord Notification**: Sends formatted messages to your Discord channel
+3. **Keyword Matching**: Filters titles using whole-word matching (supports phrases)
+4. **Metadata Extraction**: For matching articles, fetches OpenGraph images and article previews
+5. **Duplicate Detection**: Uses Bun's SQLite to track already-sent articles
+6. **Rich Discord Notification**: Sends beautifully formatted embeds with images, descriptions, and keyword highlights
 
 ## Project Structure
 
