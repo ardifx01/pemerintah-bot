@@ -1,6 +1,6 @@
 # Pemerintah Bot - Indonesian News Monitor
 
-A TypeScript-based bot that monitors Indonesian news sites and sends filtered articles to Discord channels based on customizable keywords.
+A bot that monitors Indonesian news sites and sends filtered articles to your Discord channels based on customizable keywords.
 
 ## Features
 
@@ -77,7 +77,7 @@ If you prefer to configure manually:
 
 1. **RSS First**: Attempts to fetch news via RSS feeds for efficiency
 2. **Web Scraping Fallback**: If RSS fails, falls back to web scraping
-3. **Duplicate Detection**: Uses SQLite to track already-sent articles
+3. **Duplicate Detection**: Uses Bun's SQLite to track already-sent articles
 4. **Keyword Matching**: Filters titles using whole-word matching
 5. **Discord Notification**: Sends formatted messages to your Discord channel
 
