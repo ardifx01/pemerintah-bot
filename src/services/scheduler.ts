@@ -129,6 +129,10 @@ export class SchedulerService {
     return nextDate ? nextDate.toJSDate() : null;
   }
 
+  getJob(name: string): CronJob | null {
+    return this.jobs.get(name) || null;
+  }
+
   private minutesToCron(minutes: number): string {
     if (minutes < 1) {
       throw new Error("Interval must be at least 1 minute");

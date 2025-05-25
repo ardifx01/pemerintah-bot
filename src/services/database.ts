@@ -85,23 +85,47 @@ class DatabaseService {
       throw new Error("Database not initialized");
     }
 
-    const query = this.db.query(`
-      INSERT INTO articles (url, title, source, published_at, processed_at, matched_keywords, image_url, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    try {
+      const query = this.db.query(`
+        INSERT OR IGNORE INTO articles (url, title, source, published_at, processed_at, matched_keywords, image_url, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    const result = query.run(
-      article.url,
-      article.title,
-      article.source,
-      article.publishedAt.toISOString(),
-      article.processedAt.toISOString(),
-      JSON.stringify(article.matchedKeywords),
-      article.imageUrl || null,
-      article.description || null
-    );
+      const result = query.run(
+        article.url,
+        article.title,
+        article.source,
+        article.publishedAt.toISOString(),
+        article.processedAt.toISOString(),
+        JSON.stringify(article.matchedKeywords),
+        article.imageUrl || null,
+        article.description || null
+      );
 
-    return result.lastInsertRowid as number;
+      // If no rows were affected, the article already exists
+      if (result.changes === 0) {
+        logger.debug("Article already exists in database", {
+          url: article.url,
+        });
+        // Return the existing article ID
+        const existingQuery = this.db.query(
+          "SELECT id FROM articles WHERE url = ?"
+        );
+        const existing = existingQuery.get(article.url) as {
+          id: number;
+        } | null;
+        return existing?.id || 0;
+      }
+
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      logger.error("Failed to save article to database", {
+        error,
+        url: article.url,
+        title: article.title,
+      });
+      throw error;
+    }
   }
 
   async getRecentArticles(

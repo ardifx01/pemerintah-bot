@@ -3,16 +3,15 @@ import * as cheerio from "cheerio";
 import { BaseScraper, NewsItem, ScrapedResult } from "./base.js";
 import { logger } from "../utils/logger.js";
 
-export class DetikScraper extends BaseScraper {
+export class KompasScraper extends BaseScraper {
   private rssParser: Parser;
   private readonly RSS_URLS = [
-    "https://news.detik.com/berita/rss", // News RSS feed
-    "https://finance.detik.com/rss", // Finance RSS feed
+    "https://rss.kompas.com/api/feed/social?apikey=bc58c81819dff4b8d5c53540a2fc7ffd83e6314a", // Main RSS feed
   ];
-  private readonly BASE_URL = "https://www.detik.com";
+  private readonly BASE_URL = "https://www.kompas.com";
 
   constructor(userAgent: string) {
-    super("Detik.com", userAgent);
+    super("Kompas.com", userAgent);
     this.rssParser = new Parser({
       timeout: 10000,
       headers: {
@@ -34,19 +33,19 @@ export class DetikScraper extends BaseScraper {
         result.articles = rssArticles;
         result.success = true;
         logger.info(
-          `Successfully scraped ${rssArticles.length} articles from Detik RSS`
+          `Successfully scraped ${rssArticles.length} articles from Kompas RSS`
         );
       } else {
-        logger.info("RSS failed, falling back to HTML scraping for Detik");
+        logger.info("RSS failed, falling back to HTML scraping for Kompas");
         const htmlArticles = await this.scrapeViaHTML();
         result.articles = htmlArticles;
         result.success = htmlArticles.length > 0;
-        logger.info(`Scraped ${htmlArticles.length} articles from Detik HTML`);
+        logger.info(`Scraped ${htmlArticles.length} articles from Kompas HTML`);
       }
 
       this.setLastScrapeTime();
     } catch (error: any) {
-      const errorMessage = `Detik scraping failed: ${error.message}`;
+      const errorMessage = `Kompas scraping failed: ${error.message}`;
       result.errors.push(errorMessage);
       logger.error(errorMessage, { error });
     }
@@ -63,7 +62,7 @@ export class DetikScraper extends BaseScraper {
         const feed = await this.rssParser.parseURL(rssUrl);
 
         if (!feed.items || feed.items.length === 0) {
-          logger.warn(`No items found in Detik RSS feed: ${rssUrl}`);
+          logger.warn(`No items found in Kompas RSS feed: ${rssUrl}`);
           continue;
         }
 
@@ -132,11 +131,12 @@ export class DetikScraper extends BaseScraper {
       const articles: NewsItem[] = [];
 
       const selectors = [
-        ".list-content .list-item", // Main list items
-        ".list-news .item", // News list items
-        ".list li", // Generic list items
-        "article", // Article elements
-        ".media", // Media items
+        ".article__list .article__item", // Main article list
+        ".headline .article__item", // Headline articles
+        ".latest .article__item", // Latest articles
+        ".terkini .article__item", // Terkini (latest) articles
+        "article", // Generic article elements
+        ".list-berita .item", // News list items
       ];
 
       for (const selector of selectors) {
@@ -155,23 +155,25 @@ export class DetikScraper extends BaseScraper {
             let url = "";
 
             // Pattern 1: Title and link in nested elements
-            const linkEl = $el.find('a[href*="/read/"]').first();
+            const linkEl = $el.find('a[href*="kompas.com"]').first();
             if (linkEl.length) {
               url = linkEl.attr("href") || "";
               title =
                 linkEl.text().trim() ||
-                linkEl.find("h2, h3, .title").text().trim();
+                linkEl.find("h2, h3, .article__title").text().trim();
             }
 
             // Pattern 2: Direct link element
-            if (!title && $el.is('a[href*="/read/"]')) {
+            if (!title && $el.is('a[href*="kompas.com"]')) {
               title = $el.text().trim();
               url = $el.attr("href") || "";
             }
 
-            // Pattern 3: Title in specific Detik classes
+            // Pattern 3: Title in specific Kompas classes
             if (!title) {
-              const titleEl = $el.find(".media__title, .title, h2, h3").first();
+              const titleEl = $el
+                .find(".article__title, .title, h2, h3")
+                .first();
               if (titleEl.length) {
                 title = titleEl.text().trim();
                 url = $el.find("a").first().attr("href") || "";
@@ -186,18 +188,28 @@ export class DetikScraper extends BaseScraper {
             if (title.length < 10) return;
 
             url = this.makeAbsoluteUrl(url, this.BASE_URL);
-            if (!this.isValidUrl(url) || !url.includes("/read/")) {
+            if (!this.isValidUrl(url) || !url.includes("kompas.com")) {
               return;
             }
 
             let publishedAt = new Date();
-            const dateEl = $el.find(".date, .time, .media__date, time").first();
+            const dateEl = $el
+              .find(".article__date, .date, .time, time")
+              .first();
             if (dateEl.length) {
               const dateText =
                 dateEl.text().trim() || dateEl.attr("datetime") || "";
               if (dateText) {
                 publishedAt = this.parseDate(dateText);
               }
+            }
+
+            // Skip articles older than 48 hours
+            const now = new Date();
+            const hoursDiff =
+              (now.getTime() - publishedAt.getTime()) / (1000 * 60 * 60);
+            if (hoursDiff > 48) {
+              return;
             }
 
             if (articles.some((article) => article.url === url)) {
@@ -211,24 +223,18 @@ export class DetikScraper extends BaseScraper {
               source: this.source,
             });
           } catch (error) {
-            logger.debug("Error processing HTML element", { error });
+            logger.warn("Error processing HTML element", { error });
           }
         });
 
-        // If we found articles with this selector, use them and stop
-        if (articles.length > 0) {
-          logger.debug(
-            `Successfully extracted ${articles.length} articles using selector: ${selector}`
-          );
-          break;
-        }
+        if (articles.length >= 20) break;
       }
 
       return articles
         .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
-        .slice(0, 15);
+        .slice(0, 20);
     } catch (error: any) {
-      logger.error("HTML scraping failed for Detik", { error: error.message });
+      logger.error("HTML scraping failed for Kompas", { error });
       throw error;
     }
   }

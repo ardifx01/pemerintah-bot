@@ -1,0 +1,42 @@
+# Development files
+*.log
+logs/
+.DS_Store
+.env.local
+.env.development
+
+# Node modules (will be installed fresh)
+node_modules/
+
+# Development database
+data/
+*.db
+*.sqlite
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Test files
+test/
+tests/
+*.test.ts
+*.spec.ts
+
+# Build artifacts (if any)
+dist/
+build/
+
+# Temporary files
+tmp/
+temp/ 

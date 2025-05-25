@@ -7,6 +7,7 @@ import { SchedulerService } from "./services/scheduler.js";
 import { CNNIndonesiaScraper } from "./scrapers/cnn-indonesia.js";
 import { DetikScraper } from "./scrapers/detik.js";
 import { BBCIndonesiaScraper } from "./scrapers/bbc-indonesia.js";
+import { KompasScraper } from "./scrapers/kompas.js";
 import type { BaseScraper } from "./scrapers/base.js";
 import type { Article } from "./services/database.js";
 
@@ -31,6 +32,7 @@ class PemerintahBot {
       new CNNIndonesiaScraper(this.config.userAgent),
       new DetikScraper(this.config.userAgent),
       new BBCIndonesiaScraper(this.config.userAgent),
+      new KompasScraper(this.config.userAgent),
     ];
 
     this.validateConfiguration();
@@ -137,6 +139,13 @@ class PemerintahBot {
 
       this.logger.info("Performing initial news check...");
       await this.monitorNews();
+
+      // Now start the scheduled job for recurring runs
+      const newsJob = this.scheduler.getJob("news-monitor");
+      if (newsJob) {
+        newsJob.start();
+        this.logger.info("Started recurring news monitoring job");
+      }
 
       this.isRunning = true;
       this.logger.info("Pemerintah Bot started successfully", {
