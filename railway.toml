@@ -10,17 +10,18 @@ healthcheckTimeout = 300
 healthcheckInterval = 30
 numReplicas = 1
 
-# Resource limits to prevent OOM kills
+# Resource limits to prevent OOM kills and ensure stability
 [deploy.resources]
-memory = "512Mi"
-cpu = "0.5"
+memory = "1Gi"
+cpu = "1"
 
 # Environment-specific settings
 [environments.production]
 variables = { 
   NODE_ENV = "production",
-  # Ensure Railway uses the correct port
   PORT = "${{ PORT }}",
-  # Prevent timeouts during startup
-  RAILWAY_HEALTHCHECK_TIMEOUT = "300"
+  RAILWAY_HEALTHCHECK_TIMEOUT = "300",
+  SQLITE_TMPDIR = "/tmp",
+  # Increase Node.js memory limit
+  NODE_OPTIONS = "--max-old-space-size=768"
 } 

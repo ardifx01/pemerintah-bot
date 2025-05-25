@@ -30,7 +30,26 @@ class DatabaseService {
         mkdirSync(dbDir, { recursive: true });
       }
 
+      // Test write permissions before creating database
+      try {
+        const testFile = `${dbDir}/test.tmp`;
+        require("fs").writeFileSync(testFile, "test");
+        require("fs").unlinkSync(testFile);
+        logger.debug("Database directory write test successful");
+      } catch (error) {
+        logger.error("Database directory is not writable", {
+          error,
+          path: dbDir,
+        });
+        throw new Error(`Database directory is not writable: ${dbDir}`);
+      }
+
       this.db = new Database(this.dbPath);
+
+      this.db.run("PRAGMA journal_mode = WAL");
+      this.db.run("PRAGMA synchronous = NORMAL");
+      this.db.run("PRAGMA cache_size = 1000");
+      this.db.run("PRAGMA temp_store = memory");
 
       this.createTables();
 
@@ -86,6 +105,17 @@ class DatabaseService {
     }
 
     try {
+      if (!article.url || !article.title || !article.source) {
+        throw new Error("Missing required article fields");
+      }
+
+      const sanitizedTitle = article.title
+        .replace(/[\x00-\x1F\x7F]/g, "")
+        .trim();
+      if (!sanitizedTitle) {
+        throw new Error("Article title is empty after sanitization");
+      }
+
       const query = this.db.query(`
         INSERT OR IGNORE INTO articles (url, title, source, published_at, processed_at, matched_keywords, image_url, description)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -93,7 +123,7 @@ class DatabaseService {
 
       const result = query.run(
         article.url,
-        article.title,
+        sanitizedTitle,
         article.source,
         article.publishedAt.toISOString(),
         article.processedAt.toISOString(),
@@ -102,12 +132,10 @@ class DatabaseService {
         article.description || null
       );
 
-      // If no rows were affected, the article already exists
       if (result.changes === 0) {
         logger.debug("Article already exists in database", {
           url: article.url,
         });
-        // Return the existing article ID
         const existingQuery = this.db.query(
           "SELECT id FROM articles WHERE url = ?"
         );
@@ -117,14 +145,46 @@ class DatabaseService {
         return existing?.id || 0;
       }
 
-      return result.lastInsertRowid as number;
-    } catch (error) {
-      logger.error("Failed to save article to database", {
-        error,
-        url: article.url,
-        title: article.title,
+      logger.debug("Article saved successfully", {
+        id: result.lastInsertRowid,
+        title: sanitizedTitle,
+        source: article.source,
       });
-      throw error;
+
+      return result.lastInsertRowid as number;
+    } catch (error: any) {
+      if (error.code === "SQLITE_CORRUPT" || error.errno === 11) {
+        logger.error("Database corruption detected, attempting recovery", {
+          error,
+          article: article.title,
+        });
+        try {
+          await this.initialize();
+          return this.saveArticle(article);
+        } catch (recoveryError) {
+          logger.error("Database recovery failed", { recoveryError });
+          throw recoveryError;
+        }
+      }
+
+      logger.error("Failed to save article to database", {
+        error: {
+          message: error.message,
+          code: error.code,
+          errno: error.errno,
+        },
+        article: {
+          url: article.url,
+          title: article.title,
+          source: article.source,
+        },
+      });
+
+      // Don't throw for non-critical errors to prevent bot from crashing
+      logger.warn(
+        "Continuing despite database error to maintain bot stability"
+      );
+      return 0;
     }
   }
 

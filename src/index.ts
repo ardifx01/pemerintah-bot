@@ -82,19 +82,106 @@ class PemerintahBot {
         }
 
         if (url.pathname === "/health") {
-          return new Response(
-            JSON.stringify({
-              status: "healthy",
-              uptime: process.uptime(),
-              nextCheck: this.scheduler.getNextRunTime("news-monitor"),
-            }),
-            {
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-              },
-            }
-          );
+          try {
+            const dbStats = await this.database.getStats();
+            const schedulerStatus = this.scheduler.getJobsStatus();
+
+            return new Response(
+              JSON.stringify({
+                status: "healthy",
+                uptime: process.uptime(),
+                nextCheck: this.scheduler.getNextRunTime("news-monitor"),
+                database: {
+                  connected: !!this.database,
+                  totalArticles: dbStats.total,
+                  articlesBySource: dbStats.bySource,
+                },
+                scheduler: {
+                  jobs: schedulerStatus,
+                },
+                memory: {
+                  used: Math.round(
+                    process.memoryUsage().heapUsed / 1024 / 1024
+                  ),
+                  total: Math.round(
+                    process.memoryUsage().heapTotal / 1024 / 1024
+                  ),
+                },
+                environment: {
+                  nodeEnv: process.env.NODE_ENV,
+                  platform: process.platform,
+                  nodeVersion: process.version,
+                },
+              }),
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                },
+              }
+            );
+          } catch (error) {
+            this.logger.error("Health check failed", { error });
+            return new Response(
+              JSON.stringify({
+                status: "unhealthy",
+                error: error instanceof Error ? error.message : "Unknown error",
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString(),
+              }),
+              {
+                status: 503,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                },
+              }
+            );
+          }
+        }
+
+        if (url.pathname === "/debug") {
+          try {
+            const recentArticles = await this.database.getRecentArticles(
+              undefined,
+              10
+            );
+            return new Response(
+              JSON.stringify({
+                recentArticles: recentArticles.map((article) => ({
+                  title: article.title,
+                  source: article.source,
+                  processedAt: article.processedAt,
+                  keywords: article.matchedKeywords,
+                })),
+                config: {
+                  sources: this.scrapers.map((s) => s.getSource()),
+                  keywords: this.config.keywords,
+                  checkInterval: this.config.monitoring.checkIntervalMinutes,
+                },
+                lastRun: this.scheduler.getNextRunTime("news-monitor"),
+              }),
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                },
+              }
+            );
+          } catch (error) {
+            return new Response(
+              JSON.stringify({
+                error: error instanceof Error ? error.message : "Debug failed",
+              }),
+              {
+                status: 500,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                },
+              }
+            );
+          }
         }
 
         return new Response("Not Found", { status: 404 });
@@ -318,7 +405,6 @@ class PemerintahBot {
   }
 
   private scheduleStatusLogging(): void {
-    // Log status every hour
     this.scheduler.scheduleJob(
       "status-logger",
       60, // 60 minutes
@@ -335,7 +421,6 @@ class PemerintahBot {
       }
     );
 
-    // Keep Railway container alive with self-ping every 10 minutes
     this.scheduler.scheduleJob("keep-alive", 10, async () => {
       try {
         const healthUrl = `http://localhost:${process.env.PORT || 3000}/health`;
@@ -348,7 +433,6 @@ class PemerintahBot {
       }
     });
 
-    // Cleanup old articles daily
     this.scheduler.scheduleJob(
       "database-cleanup",
       "0 2 * * *", // 2 AM daily
