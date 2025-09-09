@@ -28,7 +28,7 @@ A bot that monitors Indonesian news sites and sends filtered articles to your Di
 1. **Clone and install dependencies**:
 
    ```bash
-   git clone https://github.com/itujono/pemerintah-bot
+   git clone https://github.com/ardifx01/pemerintah-bot
    cd pemerintah-bot
    bun install
    ```
